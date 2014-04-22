@@ -1,0 +1,149 @@
+Bootstraping WordPress/Nginx/PHP/MySQL on a Cheap VPS with lowendscript
+Tags:  lowendscript Date/Time:  July 28, 2010 @ 1:07 am, by LowEndAdmin
+One constantly posted question on LowEndBox and LowEndTalk is — how to get the same setup as LowEndBox, a WordPress site that runs on cheap VPS with 80MB of memory? Instead of doing a step-by-step explanation (damn I hate writing long blog posts), I decided to wrap it into a bash script that does it all.
+
+Nginx	PHP
+WordPress	MySQL
+It is based on my previous script here, and it has been tested on both Debian 5 “Lenny” and Ubuntu 10.04 “Lucid Lynx”. Sorry no other distributions are supported. It is currently hosted at github so feel free to branch it and tune it to your heart’s desire.
+
+
+Usage
+
+Here is a quick step by step on how to set up a WordPress blog running on Nginx, PHP/FastCGI and MySQL on a low end box. Let’s assume that you are going to set up a blog on hostname “blog.example.com“.
+
+Go and buy a cheap VPS. Yes, you know where to find cheap virtual servers under $7/month, don’t you? :) I am using my 6 pound/year RackVM VPS with 128MB memory to test this script, and the performance turns out to be quite good. YMMV.
+
+Make sure it is either a Debian or a Ubuntu distro though.
+
+After gaining root access to your VPS,
+
+# wget --no-check-certificate https://github.com/lowendbox/lowendscript/raw/master/setup-debian.sh
+...
+# bash setup-debian.sh system
+...
+# bash setup-debian.sh exim4
+...
+# bash setup-debian.sh nginx
+...
+# bash setup-debian.sh mysql
+...
+# bash setup-debian.sh php
+...
+# bash setup-debian.sh wordpress blog.example.com
+...
+Now altering your DNS entry to point blog.example.com to your new VPS (or alter your local /etc/hosts entry). Navigate to it from your browser, and you should be presented with WordPress set up page. Fill in your blog’s name, admin’s password and contact email, and your new WordPress is online!
+
+Just repeat the last step (running bash setup-debian.sh wordpress <hostname>) to set up more blogs on the same box.
+
+That’s it!
+
+Software Stack
+
+It’s pretty similar to my own stack that runs LowEndBox.com.
+
+dropbear to replace openssh. Invoked from xinetd.
+inetutils-syslogd to replace rsyslog.
+exim4 to replace sendmail (if installed). Re-configured to allow Internet delivery.
+cron
+nginx
+mysql. Re-configured to remove innodb support, remove query cache and reduce key buffer size.
+php with built-in FastCGI interface. Running only 1 child process and respawn after 5,000 requests.
+The lowendscript is also
+
+Removing some commonly bundled applications that should not be there in the first place for a minimal distro (apache2, sendmail, bind9, samba, nscd, etc).
+MySQL root is given a new password (which can be found in ~root/.my.cnf)
+Installing each WordPress site under /var/www/<hostname>. It will create appropriate database, users and password for the site.
+I have to say that it is still “work in progress”, but if you want to figure out the internals please check the source code of that bash script.
+
+Memory Usage
+
+I am testing the same script on the following 3 systems:
+
+Ubuntu 10.04 64bit (RackVM)
+Debian 5 64bit (RackVM)
+Debian 5 32bit (VPSGuy)
+They are all showing different memory usage. I am taking the snapshot of memory usage AFTER 10 page loads on the WordPress blog that has been created to ensure PHP process is fully loaded.
+
+Ubuntu 10.04 64bit
+
+root@ubuntu64:~# ps aux
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.0  0.5  23300  1536 ?        Ss   06:58   0:00 init
+root     10124  0.0  0.5  23576  1496 ?        Ss   07:34   0:00 dropbear -i
+root     15742  0.0  0.7  17880  1944 pts/0    Ss   07:35   0:00 -bash
+root     15754  0.0  0.4  14960  1084 pts/0    R+   07:35   0:00 ps aux
+root     24290  0.0  0.3  12508   788 ?        S    07:22   0:00 /usr/sbin/syslo
+root     24524  0.0  0.3  21064  1004 ?        Ss   07:22   0:00 cron
+root     25689  0.0  0.3  19512   972 ?        Ss   07:22   0:00 /usr/sbin/xinet
+mysql    26346  0.0  4.2  61812 11248 ?        Ssl  07:23   0:00 /usr/sbin/mysql
+www-data 27920  0.0  2.6  87768  7048 ?        Ss   07:23   0:00 /usr/bin/php-cg
+www-data 27922  0.5 15.0 122460 39432 ?        S    07:23   0:04 /usr/bin/php-cg
+103      30162  0.0  0.3  44356  1000 ?        Ss   07:24   0:00 /usr/sbin/exim4
+root     30267  0.0  0.3  28104   932 ?        Ss   07:24   0:00 nginx: master p
+www-data 30268  0.0  0.8  28744  2196 ?        S    07:24   0:00 nginx: worker p
+
+root@ubuntu64:~# free
+             total       used       free     shared    buffers     cached
+Mem:        262144     100500     161644          0          0          0
+-/+ buffers/cache:     100500     161644
+Swap:            0          0          0
+Memory Usage: 98.1MB
+
+Debian 5 64bit
+
+debian64:~# ps aux
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.0  0.2  10304   740 ?        Ss   12:22   0:00 init [2]
+106       1414  0.0  0.3  42708  1004 ?        Ss   12:26   0:00 /usr/sbin/exim4
+www-data  1655  0.0  2.5  72028  6560 ?        Ss   12:26   0:00 /usr/bin/php-cg
+www-data  1657  0.9 11.7  98500 30928 ?        S    12:26   0:03 /usr/bin/php-cg
+www-data  3126  0.0  0.7  28380  1912 ?        S    12:29   0:00 nginx: worker p
+root      7668  0.1  0.5  23340  1528 ?        Rs   12:31   0:00 dropbear -i
+root      7831  0.0  0.6  17472  1716 pts/0    Ss   12:32   0:00 -bash
+root      7836  0.0  0.3  14720   980 pts/0    R+   12:32   0:00 ps aux
+root     20169  0.0  0.3  18540   936 ?        Ss   12:22   0:00 /usr/sbin/cron
+root     24462  0.0  0.2  12236   732 ?        S    12:25   0:00 /usr/sbin/syslo
+root     25637  0.0  0.3  19256   952 ?        Ss   12:25   0:00 /usr/sbin/xinet
+root     25694  0.0  0.5  28380  1552 ?        Ss   12:25   0:00 nginx: master p
+root     32427  0.0  0.2   3872   588 ?        S    12:26   0:00 /bin/sh /usr/bi
+mysql    32466  0.0  3.0  50420  8124 ?        Sl   12:26   0:00 /usr/sbin/mysql
+root     32468  0.0  0.2   3772   592 ?        S    12:26   0:00 logger -p daemo
+
+debian64:~# free
+             total       used       free     shared    buffers     cached
+Mem:        262144      61008     201136          0          0          0
+-/+ buffers/cache:      61008     201136
+Swap:            0          0          0
+Memory Usage: 59.6MB
+
+Debian 5 32bit
+
+debian32:~# ps aux
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.0  0.1   1980   688 ?        Ss   23:34   0:00 init [2]
+root     14064  0.0  0.1   1704   512 ?        S    23:52   0:00 /bin/sh /usr/bi
+mysql    14119  0.0  1.7  20056  6968 ?        Sl   23:52   0:00 /usr/sbin/mysql
+root     14120  0.0  0.1   1628   536 ?        S    23:52   0:00 logger -p daemo
+www-data 15968  0.0  1.2  16352  4996 ?        Ss   23:53   0:00 /usr/bin/php-cg
+www-data 15971  0.5  4.7  29436 18576 ?        S    23:53   0:01 /usr/bin/php-cg
+root     16040  0.0  0.3   2700  1464 ?        Rs   23:53   0:00 dropbear -i
+root     16119  0.0  0.1   1880   684 ?        S    23:44   0:00 /usr/sbin/syslo
+root     16133  0.0  0.3   2780  1536 pts/0    Ss   23:54   0:00 -bash
+root     17728  0.0  0.2   2352   896 ?        Ss   23:45   0:00 /usr/sbin/xinet
+www-data 17758  0.0  0.3   5004  1488 ?        S    23:54   0:00 nginx: worker p
+root     27834  0.0  0.3   4548  1236 ?        Ss   23:47   0:00 nginx: master p
+root     28146  0.0  0.2   2296   896 pts/0    R+   23:57   0:00 ps aux
+102      32065  0.0  0.2   6104   900 ?        Ss   23:49   0:00 /usr/sbin/exim4
+
+debian32:~# free
+             total       used       free     shared    buffers     cached
+Mem:        262144      44272     217872          0          0          0
+-/+ buffers/cache:      44272     217872
+Swap:            0          0          0
+Memory Usage: 43.2MB
+
+So to put that in summary form
+
+Ubuntu 10.04 uses significantly more memory than Debian 5 (PHP5.3/MySQL5.1 vs. PHP5.2/MySQL5.0). So pick your distro wisely and maybe you don’t need the latest and greatest if your application does not need it.
+32bit also uses quite a bit less than 64bit, running exactly the same version of stack. That pretty much confirms what I posted before.
+And hopefully the above script is useful for your next WordPress splog farm :P
