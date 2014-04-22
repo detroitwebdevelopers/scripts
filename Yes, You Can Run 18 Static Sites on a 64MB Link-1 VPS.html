@@ -1,0 +1,337 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>Untitled Document</title>
+</head>
+
+<body>
+<div class="post-206 post type-post status-publish format-standard hentry category-tuning tag-vpslink-com" id="post-206">
+  <h2 class="storytitle"><a href="http://lowendbox.com/blog/yes-you-can-run-18-static-sites-on-a-64mb-link-1-vps/" rel="bookmark">Yes, You Can Run 18 Static Sites on a 64MB Link-1 VPS</a></h2>
+  <div class="storycontent">
+    <p>One thing I hated about <a href="http://www.webhostingtalk.com/">WebHostingTalk</a> is how much bad advice the so-called &#8220;professionals&#8221; are giving out to the world. Some poor college student asked in the VPS forums <a href="http://www.webhostingtalk.com/showthread.php?t=765561">whether he is able to run 18 static HTML sites</a> on <a href="http://www.vpslink.com/">VPSLink.com</a> Link-1 plan (64MB RAM, 2.5GB storage &amp; 100GB/month data), and the typical responses are:</p>
+<blockquote>
+<p>&#8220;I do not believe you can host 18 websites on 64MB of RAM. I&#8217;d bump that up to at least 128 or 256.&#8221; &#8211;nexbyte</p>
+<p>&#8220;I really wouldn&#8217;t advise anything lower than 265MB RAM for website hosting.&#8221; &#8211;RikeMedia</p>
+</blockquote>
+<p><em>(Well, there are some more optimistic comments but I mainly list out those &#8220;with things to sell&#8221;)</em></p>
+<p>So, just trying to prove the point that <em>yes, 64MB is more than enough to host 18 static sites</em>, I decided to add a <b>Link-1 Xen</b> to my account and document the process. Btw, thanks to <em>Dan</em> @ VPSLink for getting my billing issue resolved :) You can get <a href="/blog/vpslink-february-sale-and-10-off-referral-discount/">10% recursive discount here</a>, or <a href="/blog/exclusive-66-off-first-3-months-from-vpslink/">66% off for the first 3 months here</a>.</p>
+<p><span id="more-206"></span></p>
+<h3>Setting Up the VPS</h3>
+<p>After my order has been provisioned, I re-image the server with a Debian 5 &#8220;Lenny&#8221; image. I normally pick Debian or Ubuntu because <code>apt-get</code> uses much less memory than RedHat/Fedora&#8217;s equivalent, and it&#8217;s also my personal preference. I named my new VPS &#8220;endor&#8221; as I usually just name my boxes after <a href="http://starwars.wikia.com/wiki/List_of_systems">Star Wars systems</a>. Re-imaging a VPS is pretty fast &#8212; 2 minutes later I have my root password sent to my email address so I can ssh in to set up the new system.</p>
+<pre class="code">
+$ <b>ssh root@endor</b>
+root@endor's password:
+Linux 66671 2.6.18-53.1.13.el5xen #1 SMP Tue Feb 12 14:04:18 EST 2008 i686
+
+endor:~# <b>free</b>
+             total       used       free     shared    buffers     cached
+Mem:         65704      64008       1696          0       5616      44100
+-/+ buffers/cache:      14292      51412
+Swap:       131064          0     131064
+endor:~# <b>cat /proc/cpuinfo</b>
+processor       : 0
+vendor_id       : GenuineIntel
+cpu family      : 6
+model           : 15
+model name      : Intel(R) Core(TM)2 Duo CPU     E4500  @ 2.20GHz
+stepping        : 13
+cpu MHz         : 2194.496
+cache size      : 2048 KB
+fdiv_bug        : no
+hlt_bug         : no
+f00f_bug        : no
+coma_bug        : no
+fpu             : yes
+fpu_exception   : yes
+cpuid level     : 10
+wp              : yes
+flags           : fpu tsc msr pae mce cx8 apic mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe nx lm constant_tsc up pni monitor ds_cpl est tm2 cx16 xtpr lahf_lm
+bogomips        : 5558.81
+</pre>
+<p><em>Plenty</em> of free memory and a single core of C2Duo E4500 &#8212; although not a high-end Xeon CPU, but should be more than sufficient to do what we need it to do. The next thing I want to do is to make sure every package is up to date.</p>
+<pre class="code">
+endor:~# <b>apt-get update &amp;&amp; apt-get upgrade</b>
+Get:1 http://debrepo.mirror.vpslink.com lenny Release.gpg [386B]
+Get:2 http://debrepo.mirror.vpslink.com lenny Release [63.2kB]
+Get:3 http://debrepo.mirror.vpslink.com lenny/main Packages [5295kB]
+Get:4 http://security.debian.org lenny/updates Release.gpg [197B]
+Get:5 http://security.debian.org lenny/updates Release [40.8kB]
+Get:6 http://debrepo.mirror.vpslink.com lenny/contrib Packages [76.1kB]
+Ign http://security.debian.org lenny/updates/main Packages/DiffIndex
+Get:7 http://security.debian.org lenny/updates/contrib Packages [14B]
+Get:8 http://security.debian.org lenny/updates/main Packages [50.6kB]
+Fetched 5526kB in 4s (1330kB/s)
+Reading package lists... Done
+...
+</pre>
+<h3>Setting Up Web Server</h3>
+<p>Okay. The 64MB VPS is now up and running. What should we do next? Installing a web server of course, so we can start serving our static pages! Which web server? <a href="/blog/getting-rid-of-a-in-lamp-for-your-low-end-vps/">Definitely not Apache</a> as it would be a waste of valuable memory here. Again my personal favourite is <a href="http://nginx.net/">Nginx</a> (pronounces Engine X), which currently powers LowEndBox.com. However, in this exercise I will go for <a href="http://www.lighttpd.net/">Lighttpd</a> because I found it easier to set up for abitary sites.</p>
+<p>First of all &#8212; get Lighttpd installed.</p>
+<pre class="code">
+endor:~# <b>apt-get install lighttpd</b>
+Reading package lists... Done
+Building dependency tree
+Reading state information... Done
+The following extra packages will be installed:
+...
+Setting up libterm-readkey-perl (2.30-4) ...
+Setting up libterm-readline-perl-perl (1.0302-1) ...
+Setting up lighttpd (1.4.19-5) ...
+Starting web server: lighttpd.
+endor:~# <b>ps -u www-data u</b>
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+www-data  1690  0.0  1.5   5416  1008 ?        S    07:17   0:00 /usr/sbin/lighttpd -f /etc/lighttpd/lighttpd.conf
+</pre>
+<p>Plain vanilla stripped down and un-configured 32 bit Lighttpd sits around 1MB RSS &#8212; not bad.</p>
+<p>Next, we need to get our websites up there and point Lighttpd to them. It&#8217;s a good idea to put the web sites in an organised structure inside the file system. I usually just place them this way:</p>
+<ul>
+<li><code>/var/www/<em>&lt;hostname&gt;</em>/html</code></li>
+</ul>
+<p>So if I have an HTML file at http://www.example.com/testing.html, it will sit on the file system at <code>/var/www/www.example.com/html/testing.html</code>. Unfortunately I do not have 18 static sites. For testing purpose I am only going to display a very basic HTML page at http://test.lowendbox.com/.</p>
+<pre class="code">
+endor:~# <b>mkdir -p /var/www/test.lowendbox.com/html</b>
+endor:~# <b>echo '&lt;h1&gt;Low End Box Rocks!&lt;/h1&gt;' &gt; /var/www/test.lowendbox.com/html/index.html</b>
+</pre>
+<p>So now our &#8220;website&#8221; is ready &#8212; how does Lighttpd, our webserver, knows where to find the files corresponding to the website? That&#8217;s where Lighttpd&#8217;s <a href="http://redmine.lighttpd.net/projects/lighttpd/wiki/Docs:ModSimpleVhost">mod_simple_vhost</a> comes in handy.</p>
+<pre class="code">
+endor:~# <b>lighttpd-enable-mod simple-vhost</b>
+Available modules: auth cgi fastcgi proxy rrdtool simple-vhost ssi ssl status userdir
+Already enabled modules:
+Enabling simple-vhost: ok
+Run /etc/init.d/lighttpd force-reload to enable changes
+endor:~# <b>/etc/init.d/lighttpd force-reload</b>
+Stopping web server: lighttpd.
+Starting web server: lighttpd.
+</pre>
+<p>Now navigate to test.lowendbox.com (which already has an A record to my new VPS&#8217;s IP address) &#8212; here we have it! Low End Box Rocks!!!</p>
+<p class="notes">Prerequisite:<br/>You must be already familiar with DNS and know how to create records to point to IP addresses. For free DNS hosting I recommend <a href="http://www.everydns.com/">EveryDNS</a>, which has also been hosting LowEndBox&#8217;s domain.</p>
+<p>You can now basically just dump static files at /var/www/<em>&lt;hostname&gt;</em>/html, with &lt;hostname&gt; resolved to your VPS&#8217;s IP address, and you will have your static websites over there in no time. You do not even need to tell Lighttpd to reload, as mod_simple_vhost automatically maps the hostname to appropriate file name. Repeat it 18 times and problem solved!</p>
+<p>At 1 single testing site with no traffic, Lighttpd sits at around 1.5MB RSS, although I doubt it would increase significantly when you increase the number of sites or the traffic. Lighttpd and Nginx are single-threaded poll-based asynchronised web servers so for static file serving, the bottle-neck would be disk/network IO rather than amount of memory or CPU performance.</p>
+<p>There are still <em>lots</em> of memory left. Maybe we can have some fun.</p>
+<h3>Installing WordPress</h3>
+<p>So you think, &#8220;hey Low End Box rocks and it runs on <a href="http://wordpress.org/">WordPress</a>. So maybe I will have that installed as well!&#8221; Wow. But WordPress is a <em>content management system</em> for creating <em>dynamic websites</em>! It simply cannot be possible on a 64MB VPS, the WHT crowd says! Grrr!! Let&#8217;s give it a try.</p>
+<p>To run WordPress from your static-file serving Lighttpd, you need a few more packages &#8212; namely MySQL and PHP in CGI/FastCGI mode.</p>
+<pre class="code">
+endor:~# <b>apt-get install mysql-server php5-cgi php5-mysql</b>
+Reading package lists... Done
+Building dependency tree
+Reading state information... Done
+The following extra packages will be installed:
+...
+Creating config file /etc/php5/cgi/php.ini with new version
+Setting up php5-mysql (5.2.6.dfsg.1-1+lenny2) ...
+Setting up sgml-base (1.26) ...
+Setting up xml-core (0.12) ...
+Setting up mailx (1:20071201-3) ...
+</pre>
+<p>I know it installs whole lot of other junks but don&#8217;t worry &#8212; we will live with them first and will try to optimise later. It also requires you to set up the root password for MySQL server, and I conveniently chose the most obscured password in this exercise &#8212; &#8220;root&#8221; (yes, don&#8217;t use that because I am already using it as my root password :)</p>
+<p>We then need to configure lighttpd to handle PHP files.</p>
+<pre class="code">
+endor:~# <b>cat > /etc/lighttpd/conf-enabled/10-cgi-php.conf
+server.modules += ("mod_cgi")
+cgi.assign = (".php" => "/usr/bin/php5-cgi")</b><em>^D</em>
+endor:~# <b>/etc/init.d/lighttpd force-reload</b>
+Stopping web server: lighttpd.
+Starting web server: lighttpd.
+</pre>
+<p>Done! It should be able to serve PHP files. Just to test it out:</p>
+<pre class="code">
+endor:~# <b>echo '&lt;?php phpinfo(); ?&gt;' &gt; /var/www/test.lowendbox.com/html/phpinfo.php</b>
+</pre>
+<p>Now navigate to http://test.lowendbox.com/phpinfo.php &#8212; you should be able to see the output of <code>phpinfo()</code> function. What we are going to do next is to set up a WordPress blog under http://test.lowendbox.com/blog/. WordPress.org <a href="http://codex.wordpress.org/Installing_WordPress">already provides a great tutorial on installing WordPress</a>, but let&#8217;s do it <em>step by step</em> on the command prompt.</p>
+<p>My plan:</p>
+<ul>
+<li>Create database &#8220;test_blog&#8221;</li>
+<li>Download the latest WordPress and unzip to test.lowendbox.com/blog</li>
+<li>Set up configuration file and run the WordPress install</li>
+<li>Update Lighttpd to provide clean URL, aka <a href="http://codex.wordpress.org/Using_Permalinks">Pretty Permalinks</a>.</li>
+</ul>
+<p>Let&#8217;s go!</p>
+<pre class="code">
+endor:~# <b>mysqladmin -uroot -proot create test_blog</b>
+endor:~# <b>wget http://wordpress.org/latest.tar.gz</b>
+Resolving wordpress.org... 72.233.56.138, 72.233.56.139
+Connecting to wordpress.org|72.233.56.138|:80... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [application/x-gzip]
+Saving to: `latest.tar.gz'
+
+...
+
+2009-03-17 13:03:15 (1.01 MB/s) - `latest.tar.gz' saved [1624416]
+
+endor:~# <b>tar zxf latest.tar.gz -C /var/www/test.lowendbox.com/html</b>
+endor:~# <b>cd /var/www/test.lowendbox.com/html</b>
+endor:/var/www/test.lowendbox.com/html# <b>mv wordpress blog</b>
+endor:/var/www/test.lowendbox.com/html# <b>mv blog/wp-config-sample.php blog/wp-config.php</b>
+endor:/var/www/test.lowendbox.com/html# <b>vi blog/wp-config.php</b>
+</pre>
+<p>When you are editing WordPress&#8217; configuration file, set <code>DB_NAME</code> to &#8220;test_blog&#8221;, <code>DB_USER</code> and <code>DB_PASSWORD</code> to &#8220;root&#8221; for something quick, dirty and potentially insecure. Here is one final step &#8212; navigate to http://test.lowendbox.com/blog/, and WordPress will guide you through the rest of setup.</p>
+<p>It is also relatively easy to set up pretty permalinks for WordPress on Lighttpd. In our example,</p>
+<pre class="code">
+endor:~# <b>cat > /etc/lighttpd/conf-enabled/lowendbox.conf</b>
+<b>$HTTP["host"] == "test.lowendbox.com" {</b>
+<b>    $HTTP["url"] =~ "^/blog/" {</b>
+<b>        server.error-handler-404 = "/blog/index.php"</b>
+<b>    }</b>
+<b>}</b><em>^D</em>
+endor:~# <b>/etc/init.d/lighttpd force-reload</b>
+Stopping web server: lighttpd.
+Starting web server: lighttpd.
+</pre>
+<p>That&#8217;s it! You can now go into WordPress to configure the desirable Permalink Structure. Do note that the current WordPress dashboard page is <em>very resource intensive</em>, as it fetches development blog, other WP news, incoming links, etc from various sources, <em>concurrently</em> on separate PHP CGI processes. There might be plugins to turn off this server-killing behavior (or just use older version of WordPress like 2.0.x which is still maintained). Likewise some WP caching plugin can be very useful in reducing the load. Google them and you shall find.</p>
+<h3>Optimisation &#8212; Squeeze More Memory!</h3>
+<p>So now we have a Debian 5 web server box that can handle lots of static sites + a few WordPress blogs, and it fits &#8220;fine&#8221; on a 64MB Xen VPS. Let&#8217;s see what processes are running:</p>
+<pre class="code">
+endor:~# <b>ps aux</b>
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+...
+root       325  0.0  0.4   2032   292 ?        S&lt;s  04:25   0:00 udevd --daem
+root       879  0.0  0.4   2788   304 ?        Ss   Mar17   0:00 /bin/bash --
+root      1216  0.0  0.0      0     0 ?        S    Mar17   0:00 [pdflush]
+root      1649  0.0  0.2   3144   188 ?        Ss   Mar17   0:00 /usr/sbin/famd 
+root      6427  0.0  4.4   8024  2928 ?        Ss   Mar17   0:00 sshd: root@pts/
+root      6429  0.0  2.3   2804  1564 pts/0    Ss   Mar17   0:00 -bash
+root      6441  0.0  1.8  33092  1200 ?        Sl   Mar17   0:00 /usr/sbin/rsysl
+root      6453  0.0  1.4   5284   976 ?        Ss   Mar17   0:00 /usr/sbin/sshd
+root      6470  0.0  1.3   2048   896 ?        Ss   Mar17   0:00 /usr/sbin/cron
+daemon    6482  0.0  0.8   1772   560 ?        Ss   Mar17   0:00 /sbin/portmap
+www-data  6510  0.0  2.6   5848  1736 ?        S    Mar17   0:00 /usr/sbin/light
+root      6572  0.0  1.7   2488  1156 pts/0    S    Mar17   0:00 /bin/sh /usr/bi
+mysql     6611  0.0 26.2 143652 17228 pts/0    Sl   Mar17   0:00 /usr/sbin/mysql
+root      6613  0.0  0.8   1636   536 pts/0    S    Mar17   0:00 logger -p daemo
+103       6973  0.0  1.3   6112   908 ?        Ss   Mar17   0:00 /usr/sbin/exim4
+root      6986  0.0  1.3   2308   908 pts/0    R+   00:01   0:00 ps aux
+endor:~# <b>free</b>
+             total       used       free     shared    buffers     cached
+Mem:         65704      51424      14280          0        936      22588
+-/+ buffers/cache:      27900      37804
+Swap:       131064        864     130200
+</pre>
+<p>Note that it&#8217;s an idle box. The swap is slightly used and at <b>37MB free</b> it is actually not too bad. Let&#8217;s try to squeeze a little bit more memory out from the factory setup.</p>
+<p>MySQL is by far the biggest <em>offender</em>, and I have <a href="/blog/reducing-mysql-memory-usage-for-low-end-boxes/">talked about how to reduce MySQL memory usage here</a>. If you are just running simple CMS, InnoDB is probably not required &#8212; it uses more memory and a lot heavier on IO as well. We can simply use the LxAdmin&#8217;s mysql.cnf which I linked on the other blog post to get the bare-minimum MySQL running.</p>
+<pre class="code">
+endor:~# <b>cat > /etc/mysql/conf.d/lowendbox.cnf
+[mysqld]
+key_buffer = 16K
+max_allowed_packet = 1M
+table_cache = 4
+sort_buffer_size = 64K
+read_buffer_size = 256K
+read_rnd_buffer_size = 256K
+net_buffer_length = 2K
+thread_stack = 64K
+skip-bdb
+skip-innodb</b><em>^D</em>
+</pre>
+<p>As <code>mysqld_safe</code> script uses <code>/bin/sh</code> for scripting, it&#8217;s also a good idea to check <a href="/blog/replacing-big-fat-bash-with-dash-for-scripting/">whether dash is used instead of bash</a>.</p>
+<pre class="code">
+endor:~# <b>apt-get install dash</b>
+Reading package lists... Done
+Building dependency tree
+Reading state information... Done
+The following NEW packages will be installed:
+...
+Unpacking dash (from .../dash_0.5.4-12_i386.deb) ...
+Processing triggers for man-db ...
+Setting up dash (0.5.4-12) ...
+endor:~# <b>dpkg-reconfigure dash</b>
+Adding `diversion of /bin/sh to /bin/sh.distrib by dash'
+Adding `diversion of /usr/share/man/man1/sh.1.gz to /usr/share/man/man1/sh.distrib.1.gz by dash'
+endor:~# <b>/etc/init.d/mysql restart</b>
+Stopping MySQL database server: mysqld.
+Starting MySQL database server: mysqld.
+Checking for corrupt, not cleanly closed and upgrade needing tables..
+</pre>
+<p>One thing I don&#8217;t like about Debian 5 is its default inclusion of <a href="http://www.rsyslog.com/">rsyslog</a>. Well &#8212; it&#8217;s feature rich, but I don&#8217;t need MySQL and TCP syslog support. Weight at 1.2MB RSS is just a bit too fat I reckon. I am not game enough to go <em>without</em> a syslog daemon, so I just go for <a href="http://en.wikipedia.org/wiki/Syslog-ng">syslog-ng</a>. Probably not the most light weight, but it&#8217;s just something I have been using for the last couple of years.</p>
+<pre class="code">
+endor:~# <b>ps -C rsyslogd v</b>
+  PID TTY      STAT   TIME  MAJFL   TRS   DRS   RSS %MEM COMMAND
+ 6441 ?        Sl     0:00      0   207 32936  1260  1.9 /usr/sbin/rsyslogd -c3
+endor:~# <b>apt-get install syslog-ng &amp;&amp; dpkg --purge rsyslog</b>
+Reading package lists... Done
+Building dependency tree
+Reading state information... Done
+The following extra packages will be installed:
+...
+Setting up syslog-ng (2.0.9-4.1) ...
+Starting system logging: syslog-ng.
+(Reading database ... 16517 files and directories currently installed.)
+Removing rsyslog ...
+Purging configuration files for rsyslog ...
+endor:~# <b>ps -C syslog-ng v</b>
+  PID TTY      STAT   TIME  MAJFL   TRS   DRS   RSS %MEM COMMAND
+ 8215 ?        Ss     0:00      0   105  2754   708  1.0 /usr/sbin/syslog-ng -p 
+</pre>
+<p>Shedding 500kb RSS &#8212; not too bad I guess :)</p>
+<p>Next &#8212; <a href="http://neil.brown.name/portmap/">Portmap</a> and <a href="http://savannah.nongnu.org/projects/fam/">FAM</a> got installed when Lighttpd was first installed. Lighttpd does not <em>really</em> need FAM. It&#8217;s used for stat cache to reduce seeks, but can live without. Not that I have noticed any performance difference anyway for small traffic anyway. Having both of them removed from the process list would give us extra 750KB.</p>
+<pre class="code">
+endor:~# <b>apt-get remove --purge portmap</b>
+eading package lists... Done
+Building dependency tree
+Reading state information... Done
+The following packages will be REMOVED:
+...
+</pre>
+<p>OpenSSH can be <a href="/blog/replacing-openssh-with-dropbear/">replaced by dropbear</a> to save memory.</p>
+<pre class="code">
+endor:~# <b>touch /etc/ssh/sshd_not_to_be_run</b>
+endor:~# <b>apt-get install dropbear</b>
+...
+endor:~# <b>vi /etc/default/dropbear</b>
+endor:~# <b>/etc/init.d/dropbear start</b>
+Starting Dropbear SSH server: dropbear.
+</pre>
+<p>Just remember to set <code>NO_START=0</code> in <code>/etc/default/dropbear</code> so dropbear can run as a daemon. Dropbear daemon is using around 500KB less than OpenSSH daemon during idle, and for each connection it uses 1.5MB less on this Debian 5 box &#8212; that&#8217;s quite a saving!</p>
+<p>That&#8217;s probably it! Vixie cron can be replaced by a light weight <a href="http://apollo.backplane.com/FreeSrc/">DCRON</a> but I can&#8217;t seem to be able find it in Debian&#8217;s repository. Exim4 is probably one of the most light weight mail daemon you can have, but then again you might want to question &#8212; &#8220;do I need a mail daemon running&#8221;? You can probably bring it down, and just run <code>/usr/sbin/runq</code> once every 2 hours to process the queue, in case the previous delivery failed. That would probably give you another 1MB to play with.</p>
+<p>You can also use <a href="/blog/replacing-that-big-fat-bash/">PDKSH</a> to replace BASH as interactive shell to loose some weight.</p>
+<pre class="code">
+endor:~# <b>ps -C bash v</b>
+  PID TTY      STAT   TIME  MAJFL   TRS   DRS   RSS %MEM COMMAND
+ 8409 pts/1    Ss     0:00      2   663  2140  1568  2.3 -bash
+endor:~# <b>apt-get install pdksh</b>
+endor:~# <b>chsh -s /bin/pdksh</b>
+<em>&lt;log out and then SSH back in&gt;</em>
+# <b>ps -C pdksh v</b>
+  PID TTY      STAT   TIME  MAJFL   TRS   DRS   RSS %MEM COMMAND
+ 8550 pts/0    Rs     0:00      0   174  1633   588  0.8 -pdksh
+</pre>
+<p>That&#8217;s 1 full megabyte off the scale! Also note that VPSLink&#8217;s <code>/etc/inittab</code> automatically spawn a BASH process on the console &#8212; just in case you got locked out from firewall. For me it&#8217;s the last line of <code>inittab</code> file. Change it to <code>/bin/sh</code> or <code>/bin/pdksh</code>, run <code>init q</code> to reload init(1), and then kill that bash process.</p>
+<p>Here&#8217;s the end result:</p>
+<pre class="code">
+# <b>ps aux</b>
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+...
+root       325  0.0  0.4   2032   292 ?        S&lt;s  Mar17   0:00 udevd --daem
+root      1216  0.0  0.0      0     0 ?        S    Mar17   0:00 [pdflush]
+root      6470  0.0  1.3   2048   896 ?        Ss   Mar17   0:00 /usr/sbin/cron
+103       6973  0.0  1.3   6112   912 ?        Ss   Mar17   0:00 /usr/sbin/exim4
+root      7953  0.0  0.7   1716   524 ?        S    00:23   0:00 /bin/sh /usr/bi
+mysql     7992  0.0  8.2  37904  5404 ?        Sl   00:23   0:00 /usr/sbin/mysql
+root      7994  0.0  0.8   1636   536 ?        S    00:23   0:00 logger -p daemo
+root      8215  0.0  1.1   2860   776 ?        Ss   00:31   0:00 /usr/sbin/syslo
+www-data  8313  0.0  2.4   5712  1640 ?        S    00:37   0:00 /usr/sbin/light
+root      8418  0.0  0.7   2052   468 ?        Ss   00:51   0:00 /usr/sbin/dropb
+root      8527  0.0  0.7   1712   468 ?        Ss   01:19   0:00 /bin/sh --
+root      8549  0.0  1.9   2712  1300 ?        Ss   01:21   0:00 /usr/sbin/dropb
+root      8550  0.0  0.9   1808   600 pts/0    Rs   01:21   0:00 -pdksh
+root      8562  0.0  1.3   2308   908 pts/0    R+   01:26   0:00 ps aux
+# <b>free</b>
+             total       used       free     shared    buffers     cached
+Mem:         65704      58852       6852          0       2180      40344
+-/+ buffers/cache:      16328      49376
+Swap:       131064        380     130684
+</pre>
+<p>That&#8217;s 12MB trimmed, which can be used in disk cache to improve static file serving.</p>
+<h3>Conclusion</h3>
+<p>So how do we conclude? <b>64MB is more than enough to serve a few low traffic static websites</b>. You can actually run a few WordPress sites with a few hundred visitors a day &#8212; at the price equivalent to many heavily oversold shared hosting <b>and you get root access</b>!</p>
+<p>One thing about root access though &#8212; in all my examples above I used root account and never bothered to use a <em>normal</em> user account. It is <em>bad</em> from security aspect so <em>don&#8217;t do it</em>. Or at least don&#8217;t tell anyone that you use nothing but root :)</p>
+  </div>
+
+        <div class="feedback">
+  </div>
+</div>
+
+</body>
+</html>
